@@ -247,6 +247,22 @@ vector_double unconstrain::batch_fitness(const vector_double & xs) const
   vector_double original_fitness(m_problem.batch_fitness(xs));
   const vector_double::size_type nx = m_problem.get_nx();
   const vector_double::size_type n_dvs = xs.size() / nx;
+#if 1
+  vector_double::size_type nobj = m_problem.get_nobj();
+  vector_double::size_type nec = m_problem.get_nec();
+  vector_double::size_type nic = m_problem.get_nic();
+  vector_double::size_type nobj_original = nobj + nec + nic;
+  vector_double retval;
+  retval.resize(safe<vector_double::size_type>(n_dvs) * nobj);
+  vector_double y(nobj_original);
+  vector_double z; // will be resized in penalize if necessary.
+  for (vector_double::size_type i = 0; i < n_dvs; ++ i)
+  {
+    std::copy(original_fitness.data() + i * nobj_original, original_fitness.data() + (i + 1) * nobj_original, y.data());
+    penalize(y, z);
+    std::copy(z.data(), z.data() + nobj, retval.data() + i * nobj);
+  }
+#else
   vector_double::size_type nobj = m_problem.get_nobj();
   vector_double retval;
   retval.resize(safe<vector_double::size_type>(n_dvs) * nobj);
@@ -258,6 +274,7 @@ vector_double unconstrain::batch_fitness(const vector_double & xs) const
     penalize(y, z);
     std::copy(z.data(), z.data() + nobj, retval.data() + i * nobj);
   }
+#endif
   return retval;
 }
 
