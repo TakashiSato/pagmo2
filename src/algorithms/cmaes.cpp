@@ -271,7 +271,7 @@ population cmaes::evolve(population pop) const
             newpop[i] = mean + (sigma * B * D * tmp);
         }
 
-#if 1
+#if 0   // for unconstrain with "death penalty" and "kuri"
         // The population flattness in chromosome
         auto dx = (sigma * B * D * tmp).norm();
         auto f = pop.get_f();
