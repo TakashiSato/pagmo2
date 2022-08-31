@@ -52,6 +52,25 @@ see https://www.gnu.org/licenses/. */
 // the other serialization headers.
 #include <boost/serialization/optional.hpp>
 
+namespace
+{
+template <typename T>
+void printVector(const std::vector<std::vector<T>> &V)
+{
+  std::cout << "[" << std::endl;
+  for(const auto& v : V)
+  {
+    std::cout << "  [ ";
+    for(auto& x : v)
+    {
+      std::cout << x << ((&x == &*v.crbegin()) ? "" : ", ");
+    }
+    std::cout << " ]" << ((&v == &*V.crbegin()) ? "" : ", ") << std::endl;
+  }
+  std::cout << " ]" << std::endl;
+}
+}
+
 namespace pagmo
 {
 
@@ -252,6 +271,81 @@ population cmaes::evolve(population pop) const
             newpop[i] = mean + (sigma * B * D * tmp);
         }
 
+#if 1
+        // The population flattness in chromosome
+        auto dx = (sigma * B * D * tmp).norm();
+        auto f = pop.get_f();
+        auto idx_b = pop.best_idx();
+        auto idx_w = pop.worst_idx();
+        auto best_f = f[idx_b][0];
+        auto worst_f = f[idx_w][0];
+
+        // If there are more than bounds of population,
+        // worst_f is numeric_limits<double>::max()
+        // and df cannot be calculated correctly,
+        // so worst_f with finite value is calculated here.
+        if(worst_f == std::numeric_limits<double>::max())
+        {
+          worst_f = best_f;
+          for(size_t i = 0; i < f.size() ; i++)
+          {
+            if(f[i][0] == std::numeric_limits<double>::max())
+            {
+              continue;
+            }
+            if(worst_f < f[i][0])
+            {
+              worst_f = f[i][0];
+            }
+          }
+          if(best_f == worst_f)
+          {
+            worst_f = std::numeric_limits<double>::max();
+          }
+        }
+
+        // The population flattness in fitness
+        double df = std::abs(best_f - worst_f);
+
+        // 1bis - Check the exit conditions and logs
+        // Exit condition on xtol
+        {
+            if (dx < m_xtol) {
+                if (m_verbosity > 0u) {
+                    std::cout << "Exit condition -- dx (" << dx << ") < xtol(" << m_xtol << ")" << std::endl;
+                }
+                return pop;
+            }
+            // Exit condition on ftol
+            if(best_f != std::numeric_limits<double>::max()
+            && worst_f != std::numeric_limits<double>::max())
+            {
+              if (df < m_ftol) {
+                  if (m_verbosity) {
+                      std::cout << "Exit condition -- df(" << df << ") < ftol(" << m_ftol << ")" << std::endl;
+                  }
+                  return pop;
+              }
+            }
+        }
+
+        // 1bis - Logs and prints (verbosity modes > 1: a line is added every m_verbosity generations)
+        if (m_verbosity > 0u) {
+            // Every m_verbosity generations print a log line
+            if (gen % m_verbosity == 1u || m_verbosity == 1u) {
+                // Every 50 lines print the column names
+                if (count % 50u == 1u) {
+                    print("\n", std::setw(7), "Gen:", std::setw(15), "Fevals:", std::setw(15), "Best:", std::setw(15),
+                          "Worst:", std::setw(15), "dx:", std::setw(15), "df:", std::setw(15), "sigma:", '\n');
+                }
+                print(std::setw(7), gen, std::setw(15), prob.get_fevals() - fevals0, std::setw(15),
+                      best_f, std::setw(15), worst_f, std::setw(15), dx, std::setw(15), df, std::setw(15), sigma, '\n');
+                ++count;
+                // Logs
+                m_log.emplace_back(gen, prob.get_fevals() - fevals0, pop.get_f()[idx_b][0], dx, df, sigma);
+            }
+        }
+#else
         // 1bis - Check the exit conditions and logs
         // Exit condition on xtol
         {
@@ -295,6 +389,7 @@ population cmaes::evolve(population pop) const
                 m_log.emplace_back(gen, prob.get_fevals() - fevals0, pop.get_f()[idx_b][0], dx, df, sigma);
             }
         }
+#endif
         // 2 - We fix the bounds.
         // Note that this screws up the whole covariance matrix machinery and worsen
         // performances considerably.
